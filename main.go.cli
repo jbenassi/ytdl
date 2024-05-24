@@ -1,0 +1,74 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+
+	"github.com/kkdai/youtube/v2"
+)
+
+// Helper function to download a file from a URL
+func downloadFile(url, filename string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+func main() {
+	videoURL := "https://www.youtube.com/watch?v=KjSgXZHBkhg"
+
+	// Create a new YouTube client
+	client := youtube.Client{}
+
+	// Get the video information
+	video, err := client.GetVideo(videoURL)
+	if err != nil {
+		fmt.Println("Error getting video info:", err)
+		return
+	}
+
+	// Get the highest quality audio format
+	format := video.Formats.Type("audio/mp4")[0] // Select the first available audio format
+
+	// Get the download URL
+	downloadURL, err := client.GetStreamURL(video, &format)
+	if err != nil {
+		fmt.Println("Error getting download URL:", err)
+		return
+	}
+
+	fmt.Println("Download URL:", downloadURL)
+
+	// Download the video
+	err = downloadFile(downloadURL, "audio.mp4")
+	if err != nil {
+		fmt.Println("Error downloading video:", err)
+		return
+	}
+
+	fmt.Println("Audio downloaded as audio.mp4")
+
+	// Convert the downloaded video to uncompressed WAV using ffmpeg
+	cmd := exec.Command("ffmpeg", "-i", "audio.mp4", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", "output_audio.wav")
+	err = cmd.Run()
+	if err != nil {
+		fmt.Println("Error converting audio:", err)
+		return
+	}
+
+	fmt.Println("Audio extracted to output_audio.wav")
+}
